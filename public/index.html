@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mobile Charging Trailer Tracker - AMOC</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <i class="fas fa-truck-loading header-icon"></i>
+      <h1>Mobile Charging Trailer Tracker</h1>
+      <span class="header-badge">AMOC</span>
+    </div>
+    <div class="header-right">
+      <div class="stats-bar" id="statsBar">
+        <span class="stat-item"><i class="fas fa-trailer"></i> <span id="statTotal">-</span> Total</span>
+        <span class="stat-item active"><i class="fas fa-bolt"></i> <span id="statActive">-</span> Active</span>
+        <span class="stat-item transit"><i class="fas fa-route"></i> <span id="statTransit">-</span> In Transit</span>
+        <span class="stat-item stored"><i class="fas fa-warehouse"></i> <span id="statStored">-</span> Stored</span>
+        <span class="stat-item maintenance"><i class="fas fa-wrench"></i> <span id="statMaintenance">-</span> Maintenance</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="main-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h2>Trailers</h2>
+        <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+          <i class="fas fa-plus"></i> Add Trailer
+        </button>
+      </div>
+
+      <!-- Search & Filter -->
+      <div class="search-filter">
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input type="text" id="searchInput" placeholder="Search trailers..." oninput="filterTrailers()">
+        </div>
+        <select id="statusFilter" onchange="filterTrailers()">
+          <option value="all">All Status</option>
+          <option value="Active">Active</option>
+          <option value="In Transit">In Transit</option>
+          <option value="Stored">Stored</option>
+          <option value="Maintenance">Maintenance</option>
+        </select>
+      </div>
+
+      <!-- Trailer List -->
+      <div class="trailer-list" id="trailerList">
+        <div class="loading">Loading trailers...</div>
+      </div>
+    </aside>
+
+    <!-- Map -->
+    <div class="map-container">
+      <div id="map"></div>
+      
+      <!-- Map Controls -->
+      <div class="map-controls">
+        <button class="map-btn" onclick="fitAllMarkers()" title="Show all trailers">
+          <i class="fas fa-expand"></i>
+        </button>
+        <button class="map-btn" onclick="toggleSidebar()" title="Toggle sidebar">
+          <i class="fas fa-bars"></i>
+        </button>
+        <button class="map-btn" onclick="refreshData()" title="Refresh data">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Trailer Modal -->
+  <div class="modal-overlay" id="trailerModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">Add New Trailer</h3>
+        <button class="modal-close" onclick="closeModal('trailerModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="trailerForm">
+          <input type="hidden" id="formTrailerId">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Trailer Name/ID *</label>
+              <input type="text" id="formTrailerName" required placeholder="e.g., MCT-009">
+            </div>
+            <div class="form-group">
+              <label>Trailer Type</label>
+              <select id="formTrailerType">
+                <option value="Mobile Charging Trailer - 100kW">Mobile Charging Trailer - 100kW</option>
+                <option value="Mobile Charging Trailer - 150kW">Mobile Charging Trailer - 150kW</option>
+                <option value="Mobile Charging Trailer - 200kW">Mobile Charging Trailer - 200kW</option>
+                <option value="Mobile Charging Trailer - Custom">Mobile Charging Trailer - Custom</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Address / Location *</label>
+            <div class="address-input-group">
+              <input type="text" id="formAddress" required placeholder="e.g., 1234 Commerce St, Dallas, TX 75201">
+              <button type="button" class="btn btn-sm btn-secondary" onclick="geocodeAddress('form')">
+                <i class="fas fa-search-location"></i> Find
+              </button>
+            </div>
+            <div class="geocode-result" id="formGeocodeResult"></div>
+          </div>
+          <input type="hidden" id="formLatitude">
+          <input type="hidden" id="formLongitude">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Site Code</label>
+              <input type="text" id="formSiteCode" placeholder="e.g., DDA2">
+            </div>
+            <div class="form-group">
+              <label>Site Name / Location</label>
+              <input type="text" id="formSiteName" placeholder="e.g., DDA2 - Dallas, TX">
+            </div>
+          </div>
+          <p class="form-hint"><i class="fas fa-info-circle"></i> Type an address above and click "Find" to place on map. You can also click on the map directly.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Status</label>
+              <select id="formStatus">
+                <option value="Active">Active</option>
+                <option value="In Transit">In Transit</option>
+                <option value="Stored">Stored</option>
+                <option value="Maintenance">Maintenance</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Charger Count</label>
+              <input type="number" id="formChargerCount" min="0" placeholder="e.g., 8">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Charger Type</label>
+              <input type="text" id="formChargerType" placeholder="e.g., Level 2 - 19.2kW">
+            </div>
+            <div class="form-group">
+              <label>Power Capacity (kW)</label>
+              <input type="number" id="formPowerCapacity" step="any" placeholder="e.g., 150">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>GPS Device ID (for auto-tracking)</label>
+            <input type="text" id="formGpsDeviceId" placeholder="e.g., GPS-MCT-009">
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="formNotes" rows="3" placeholder="Additional notes about this trailer..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('trailerModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTrailer()">
+          <i class="fas fa-save"></i> Save Trailer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Move Trailer Modal -->
+  <div class="modal-overlay" id="moveModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Move Trailer: <span id="moveTrailerName"></span></h3>
+        <button class="modal-close" onclick="closeModal('moveModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="moveForm">
+          <input type="hidden" id="moveTrailerId">
+          <input type="hidden" id="moveLatitude">
+          <input type="hidden" id="moveLongitude">
+          <div class="form-group">
+            <label>New Address / Location *</label>
+            <div class="address-input-group">
+              <input type="text" id="moveAddress" required placeholder="e.g., 5678 Industrial Blvd, Houston, TX 77001">
+              <button type="button" class="btn btn-sm btn-secondary" onclick="geocodeAddress('move')">
+                <i class="fas fa-search-location"></i> Find
+              </button>
+            </div>
+            <div class="geocode-result" id="moveGeocodeResult"></div>
+          </div>
+          <p class="form-hint"><i class="fas fa-info-circle"></i> Type the new address and click "Find", or click on the map to set location.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>New Site Code</label>
+              <input type="text" id="moveSiteCode" placeholder="e.g., DDA2">
+            </div>
+            <div class="form-group">
+              <label>New Site Name / Location</label>
+              <input type="text" id="moveSiteName" placeholder="e.g., DDA2 - Dallas, TX">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Your Name / Alias *</label>
+              <input type="text" id="moveMovedBy" required placeholder="e.g., jsmith">
+            </div>
+            <div class="form-group">
+              <label>New Status</label>
+              <select id="moveStatus">
+                <option value="">No change</option>
+                <option value="Active">Active</option>
+                <option value="In Transit">In Transit</option>
+                <option value="Stored">Stored</option>
+                <option value="Maintenance">Maintenance</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Reason for Move</label>
+            <input type="text" id="moveReason" placeholder="e.g., Peak season support, site closure, etc.">
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="moveNotes" rows="2" placeholder="Additional move notes..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('moveModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitMove()">
+          <i class="fas fa-truck-moving"></i> Confirm Move
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Modal -->
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Move History: <span id="historyTrailerName"></span></h3>
+        <button class="modal-close" onclick="closeModal('historyModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="historyContent">
+          <div class="loading">Loading history...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('historyModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
