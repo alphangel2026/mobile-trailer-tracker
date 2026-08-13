@@ -32,9 +32,14 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <h2>Trailers</h2>
-        <button class="btn btn-primary btn-sm" onclick="openAddModal()">
-          <i class="fas fa-plus"></i> Add Trailer
-        </button>
+        <div class="sidebar-header-actions">
+          <button class="btn btn-secondary btn-sm" onclick="openBulkImportModal()" title="Import multiple trailers">
+            <i class="fas fa-file-upload"></i> Bulk Import
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+            <i class="fas fa-plus"></i> Add
+          </button>
+        </div>
       </div>
 
       <!-- Search & Filter -->
@@ -251,6 +256,48 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('historyModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Import Modal -->
+  <div class="modal-overlay" id="bulkImportModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Bulk Import Trailers</h3>
+        <button class="modal-close" onclick="closeModal('bulkImportModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 12px; color: #6b7280; font-size: 13px;">
+          Paste your trailer data below — one trailer per line. Use this format:
+        </p>
+        <div class="bulk-format-example">
+          <strong>Format:</strong> Trailer Name | Address | Site Code | Status | Charger Count | Notes<br>
+          <strong>Example:</strong><br>
+          <code>MCT-001 | 1234 Commerce St, Dallas, TX 75201 | DDA2 | Active | 8 | Peak season support</code><br>
+          <code>MCT-002 | 5678 Industrial Blvd, Houston, TX 77001 | DHO1 | Active | 6 | New site ramp-up</code><br>
+          <code>MCT-003 | 900 W Van Buren, Phoenix, AZ 85003 | DPH5 | Stored | 8 | </code>
+        </div>
+        <div class="form-group" style="margin-top: 16px;">
+          <label>Paste Trailer Data (one per line)</label>
+          <textarea id="bulkImportData" rows="10" placeholder="MCT-001 | 1234 Commerce St, Dallas, TX 75201 | DDA2 | Active | 8 | Peak season support
+MCT-002 | 5678 Industrial Blvd, Houston, TX 77001 | DHO1 | Active | 6 | New site ramp-up"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Default Trailer Type</label>
+          <select id="bulkTrailerType">
+            <option value="Mobile Charging Trailer - 150kW">Mobile Charging Trailer - 150kW</option>
+            <option value="Mobile Charging Trailer - 100kW">Mobile Charging Trailer - 100kW</option>
+            <option value="Mobile Charging Trailer - 200kW">Mobile Charging Trailer - 200kW</option>
+          </select>
+        </div>
+        <div id="bulkImportStatus"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('bulkImportModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitBulkImport()" id="bulkImportBtn">
+          <i class="fas fa-file-import"></i> Import All
+        </button>
       </div>
     </div>
   </div>

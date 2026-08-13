@@ -645,3 +645,147 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// ========================================
+// BULK IMPORT
+// ========================================
+
+function openBulkImportModal() {
+  document.getElementById('bulkImportData').value = '';
+  document.getElementById('bulkImportStatus').innerHTML = '';
+  openModal('bulkImportModal');
+}
+
+async function submitBulkImport() {
+  const raw = document.getElementById('bulkImportData').value.trim();
+  const defaultType = document.getElementById('bulkTrailerType').value;
+  
+  if (!raw) {
+    showToast('Please paste trailer data first', 'error');
+    return;
+  }
+
+  const lines = raw.split('\n').filter(line => line.trim() !== '');
+  
+  if (lines.length === 0) {
+    showToast('No valid lines found', 'error');
+    return;
+  }
+
+  const statusEl = document.getElementById('bulkImportStatus');
+  const btn = document.getElementById('bulkImportBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
+  
+  let success = 0;
+  let failed = 0;
+  let errors = [];
+
+  statusEl.innerHTML = `
+    <div class="bulk-import-progress">
+      <span>Importing 0 / ${lines.length}...</span>
+      <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+    </div>
+  `;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const parts = line.split('|').map(p => p.trim());
+
+    // Format: Name | Address | Site Code | Status | Charger Count | Notes
+    if (parts.length < 2) {
+      failed++;
+      errors.push(`Line ${i + 1}: Not enough fields (need at least Name | Address)`);
+      continue;
+    }
+
+    const trailerName = parts[0];
+    const address = parts[1];
+    const siteCode = parts[2] || null;
+    const status = parts[3] || 'Active';
+    const chargerCount = parseInt(parts[4]) || 8;
+    const notes = parts[5] || null;
+
+    // Geocode the address
+    try {
+      const geoResponse = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us`,
+        { headers: { 'User-Agent': 'AMOC-Trailer-Tracker/1.0' } }
+      );
+      const geoResults = await geoResponse.json();
+
+      if (geoResults.length === 0) {
+        failed++;
+        errors.push(`Line ${i + 1} (${trailerName}): Address not found - "${address}"`);
+        continue;
+      }
+
+      const lat = parseFloat(geoResults[0].lat);
+      const lng = parseFloat(geoResults[0].lon);
+
+      // Create the trailer
+      const res = await fetch(`${API_BASE}/api/trailers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trailer_name: trailerName,
+          trailer_type: defaultType,
+          site_code: siteCode,
+          site_name: siteCode ? `${siteCode} - ${address.split(',').slice(-2).join(',').trim()}` : address,
+          address: address,
+          latitude: lat,
+          longitude: lng,
+          status: status,
+          charger_count: chargerCount,
+          charger_type: 'Level 2 - 19.2kW',
+          notes: notes
+        })
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        success++;
+      } else {
+        failed++;
+        errors.push(`Line ${i + 1} (${trailerName}): ${result.error}`);
+      }
+    } catch (err) {
+      failed++;
+      errors.push(`Line ${i + 1} (${trailerName}): ${err.message}`);
+    }
+
+    // Update progress
+    const pct = Math.round(((i + 1) / lines.length) * 100);
+    statusEl.innerHTML = `
+      <div class="bulk-import-progress">
+        <span>Importing ${i + 1} / ${lines.length}... (${success} added, ${failed} failed)</span>
+        <div class="progress-bar"><div class="progress-fill" style="width: ${pct}%"></div></div>
+      </div>
+    `;
+
+    // Small delay to respect geocoding rate limits (1 request/second for Nominatim)
+    await new Promise(resolve => setTimeout(resolve, 1100));
+  }
+
+  // Final status
+  let resultHtml = `<div class="bulk-import-progress" style="margin-top: 12px;">
+    <strong>Import Complete:</strong> ${success} added successfully, ${failed} failed.
+  </div>`;
+  
+  if (errors.length > 0) {
+    resultHtml += `<div style="margin-top: 8px; font-size: 12px; color: #991b1b; max-height: 100px; overflow-y: auto;">
+      <strong>Errors:</strong><br>
+      ${errors.join('<br>')}
+    </div>`;
+  }
+
+  statusEl.innerHTML = resultHtml;
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-file-import"></i> Import All';
+
+  if (success > 0) {
+    showToast(`Successfully imported ${success} trailer(s)!`, 'success');
+    await loadTrailers();
+    await loadStats();
+  }
+}
