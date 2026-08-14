@@ -73,7 +73,7 @@ function initMap() {
 // GEOCODING (Address <-> Coordinates)
 // ========================================
 
-// Convert address to lat/lng using OpenStreetMap Nominatim (free, no API key needed)
+// Convert address to lat/lng using server-side geocoding (more reliable, avoids CORS/rate limit issues)
 async function geocodeAddress(mode) {
   const inputId = mode === 'form' ? 'formAddress' : 'moveAddress';
   const address = document.getElementById(inputId).value.trim();
@@ -86,34 +86,29 @@ async function geocodeAddress(mode) {
   showGeocodeResult(mode, 'Searching...', 'loading');
 
   try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us`,
-      { headers: { 'User-Agent': 'AMOC-Trailer-Tracker/1.0' } }
-    );
-    const results = await response.json();
+    const response = await fetch(`${API_BASE}/api/geocode?address=${encodeURIComponent(address)}`);
+    const result = await response.json();
 
-    if (results.length > 0) {
-      const result = results[0];
-      const lat = parseFloat(result.lat);
-      const lon = parseFloat(result.lon);
+    if (result.success) {
+      const { latitude, longitude, display_name } = result.data;
 
       if (mode === 'form') {
-        document.getElementById('formLatitude').value = lat.toFixed(6);
-        document.getElementById('formLongitude').value = lon.toFixed(6);
+        document.getElementById('formLatitude').value = latitude.toFixed(6);
+        document.getElementById('formLongitude').value = longitude.toFixed(6);
       } else {
-        document.getElementById('moveLatitude').value = lat.toFixed(6);
-        document.getElementById('moveLongitude').value = lon.toFixed(6);
+        document.getElementById('moveLatitude').value = latitude.toFixed(6);
+        document.getElementById('moveLongitude').value = longitude.toFixed(6);
       }
 
       // Zoom map to location
-      map.setView([lat, lon], 14);
+      map.setView([latitude, longitude], 14);
 
-      showGeocodeResult(mode, `Found: ${result.display_name}`, 'success');
+      showGeocodeResult(mode, `Found: ${display_name}`, 'success');
     } else {
       showGeocodeResult(mode, 'Address not found. Try a more specific address or click on the map.', 'error');
     }
   } catch (err) {
-    showGeocodeResult(mode, 'Error searching address. Try clicking on the map instead.', 'error');
+    showGeocodeResult(mode, 'Error searching address. Check your connection and try again.', 'error');
     console.error('Geocoding error:', err);
   }
 }
@@ -121,18 +116,14 @@ async function geocodeAddress(mode) {
 // Convert lat/lng back to a readable address
 async function reverseGeocode(lat, lng) {
   try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-      { headers: { 'User-Agent': 'AMOC-Trailer-Tracker/1.0' } }
-    );
+    const response = await fetch(`${API_BASE}/api/reverse-geocode?lat=${lat}&lon=${lng}`);
     const result = await response.json();
-    if (result && result.display_name) {
-      // Shorten the display name a bit
-      const parts = result.display_name.split(', ');
+    if (result.success) {
+      const parts = result.data.display_name.split(', ');
       if (parts.length > 4) {
         return parts.slice(0, 4).join(', ');
       }
-      return result.display_name;
+      return result.data.display_name;
     }
   } catch (err) {
     console.error('Reverse geocode error:', err);
@@ -742,20 +733,17 @@ async function submitBulkImport() {
 
     // Geocode the address
     try {
-      const geoResponse = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us`,
-        { headers: { 'User-Agent': 'AMOC-Trailer-Tracker/1.0' } }
-      );
-      const geoResults = await geoResponse.json();
+      const geoResponse = await fetch(`${API_BASE}/api/geocode?address=${encodeURIComponent(address)}`);
+      const geoResult = await geoResponse.json();
 
-      if (geoResults.length === 0) {
+      if (!geoResult.success) {
         failed++;
         errors.push(`Line ${i + 1} (${trailerName}): Address not found - "${address}"`);
         continue;
       }
 
-      const lat = parseFloat(geoResults[0].lat);
-      const lng = parseFloat(geoResults[0].lon);
+      const lat = geoResult.data.latitude;
+      const lng = geoResult.data.longitude;
 
       // Create the trailer
       const res = await fetch(`${API_BASE}/api/trailers`, {
