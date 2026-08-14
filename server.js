@@ -335,6 +335,95 @@ app.get('/api/gps/logs/:trailerId', (req, res) => {
 });
 
 // ============================================
+// GEOCODING ENDPOINT (server-side, more reliable)
+// ============================================
+
+app.get('/api/geocode', async (req, res) => {
+  try {
+    const { address } = req.query;
+    if (!address) {
+      return res.status(400).json({ success: false, error: 'address parameter is required' });
+    }
+
+    // Using Photon by Komoot - free, no API key, no rate limit issues
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(address)}&limit=1&lang=en`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'MobileChargingTracker/1.0 (internal-fleet-tool)'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({ success: false, error: 'Geocoding service unavailable' });
+    }
+
+    const data = await response.json();
+
+    if (data.features && data.features.length > 0) {
+      const feature = data.features[0];
+      const [longitude, latitude] = feature.geometry.coordinates;
+      const props = feature.properties;
+      const display_name = [props.name, props.street, props.city, props.state, props.country]
+        .filter(Boolean)
+        .join(', ');
+
+      res.json({
+        success: true,
+        data: {
+          latitude,
+          longitude,
+          display_name: display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
+        }
+      });
+    } else {
+      res.json({ success: false, error: 'Address not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Geocoding failed: ' + err.message });
+  }
+});
+
+app.get('/api/reverse-geocode', async (req, res) => {
+  try {
+    const { lat, lon } = req.query;
+    if (!lat || !lon) {
+      return res.status(400).json({ success: false, error: 'lat and lon parameters are required' });
+    }
+
+    const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&limit=1&lang=en`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'MobileChargingTracker/1.0 (internal-fleet-tool)'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({ success: false, error: 'Geocoding service unavailable' });
+    }
+
+    const data = await response.json();
+
+    if (data.features && data.features.length > 0) {
+      const props = data.features[0].properties;
+      const display_name = [props.name, props.street, props.city, props.state, props.country]
+        .filter(Boolean)
+        .join(', ');
+
+      res.json({
+        success: true,
+        data: { display_name }
+      });
+    } else {
+      res.json({ success: false, error: 'Location not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Reverse geocoding failed: ' + err.message });
+  }
+});
+
+// ============================================
 // STATS ENDPOINT
 // ============================================
 
