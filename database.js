@@ -13,7 +13,7 @@ const db = createClient({
 
 // Initialize tables
 async function initializeDatabase() {
-  await db.executeMultiple(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS trailers (
       id TEXT PRIMARY KEY,
       trailer_name TEXT NOT NULL,
@@ -32,8 +32,10 @@ async function initializeDatabase() {
       last_gps_update TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
-    );
+    )
+  `);
 
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS move_history (
       id TEXT PRIMARY KEY,
       trailer_id TEXT NOT NULL,
@@ -51,8 +53,10 @@ async function initializeDatabase() {
       to_longitude REAL NOT NULL,
       reason TEXT,
       notes TEXT
-    );
+    )
+  `);
 
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS gps_logs (
       id TEXT PRIMARY KEY,
       trailer_id TEXT NOT NULL,
@@ -62,7 +66,7 @@ async function initializeDatabase() {
       heading REAL,
       recorded_at TEXT DEFAULT (datetime('now')),
       source TEXT DEFAULT 'gps'
-    );
+    )
   `);
 
   // Seed data if empty
