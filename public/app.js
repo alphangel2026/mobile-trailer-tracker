@@ -263,6 +263,9 @@ function createPopupContent(trailer) {
         <button class="btn btn-secondary btn-sm" onclick="openEditModal('${trailer.id}')">
           <i class="fas fa-edit"></i> Edit
         </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTrailer('${trailer.id}', '${trailer.trailer_name}')">
+          <i class="fas fa-trash"></i>
+        </button>
       </div>
     </div>
   `;
@@ -315,6 +318,9 @@ function renderTrailerList() {
           </button>
           <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openEditModal('${trailer.id}')">
             <i class="fas fa-edit"></i> Edit
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteTrailer('${trailer.id}', '${trailer.trailer_name}')" title="Delete trailer">
+            <i class="fas fa-trash"></i>
           </button>
         </div>
       </div>
@@ -645,6 +651,34 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// ========================================
+// DELETE TRAILER
+// ========================================
+
+async function deleteTrailer(id, name) {
+  if (!confirm(`Are you sure you want to delete "${name}"?\n\nThis cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/trailers/${id}`, {
+      method: 'DELETE'
+    });
+
+    const result = await res.json();
+
+    if (result.success) {
+      showToast(`"${name}" deleted successfully`, 'success');
+      await loadTrailers();
+      await loadStats();
+    } else {
+      showToast(result.error || 'Error deleting trailer', 'error');
+    }
+  } catch (err) {
+    showToast('Error deleting trailer: ' + err.message, 'error');
+  }
+}
 
 // ========================================
 // BULK IMPORT
